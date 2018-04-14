@@ -28,7 +28,7 @@ class TweetProcessor {
 
   _getLimiter (roomId) {
     if (!this._limiters[roomId]) {
-      this._limiters[roomId] = new RateLimiter(10, 'second');
+      this._limiters[roomId] = new RateLimiter(1, 'second');
     }
 
     return this._limiters[roomId];
