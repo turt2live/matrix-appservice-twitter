@@ -5,8 +5,8 @@ const HTMLDecoder = new require('html-entities').AllHtmlEntities;
 const util = require("./util.js");
 const Promise = require('bluebird');
 
-const TWITTER_MSG_QUEUE_INTERVAL_MS = 150;
-const MSG_QUEUE_LAGGING_THRESHOLD = 50; // The number of messages to be stored in the msg queue before we complain about lag.
+const TWITTER_MSG_QUEUE_INTERVAL_MS = 500;
+const MSG_QUEUE_LAGGING_THRESHOLD = 500; // The number of messages to be stored in the msg queue before we complain about lag.
 const DEFAULT_TWEET_DEPTH = 1;
 
 class TweetProcessor {
@@ -21,6 +21,7 @@ class TweetProcessor {
     this.tweetids_to_lookup = [];
     this.lookup_tweets = [];
     this.msg_queue_intervalID = null;
+    this._isProcessing = false;
   }
 
 
@@ -30,7 +31,12 @@ class TweetProcessor {
       return;
     }
     this._msg_queue_intervalID = setInterval(() => {
-      this._process_head_of_msg_queue();
+      if (this._isProcessing) {
+        log.warn("Skipping interval checkl - already processing messages");
+        return;
+      }
+      this._isProcessing = true;
+      this._process_head_of_msg_queue().then(() => this._isProcessing = false);
     }, TWITTER_MSG_QUEUE_INTERVAL_MS);
   }
 
