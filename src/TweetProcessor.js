@@ -1,6 +1,7 @@
 const log = require('./logging.js');
-const mime = require('mime-types')
+const mime = require('mime-types');
 const HTMLDecoder = new require('html-entities').AllHtmlEntities;
+const RateLimiter = require("limiter").RateLimiter;
 
 const util = require("./util.js");
 const Promise = require('bluebird');
@@ -22,6 +23,15 @@ class TweetProcessor {
     this.lookup_tweets = [];
     this.msg_queue_intervalID = null;
     this._isProcessing = false;
+    this._limiters = {}; // {roomId: RateLimiter}
+  }
+
+  _getLimiter (roomId) {
+    if (!this._limiters[roomId]) {
+      this._limiters[roomId] = new RateLimiter(10, 'second');
+    }
+
+    return this._limiters[roomId];
   }
 
 
@@ -139,70 +149,89 @@ class TweetProcessor {
   }
 
   _push_to_msg_queue (muser, roomid, tweet, type, on_behalf_of) {
-    const time = Date.parse(tweet.created_at);
-    let content;
-    try {
-      content = this.tweet_to_matrix_content(tweet, type, on_behalf_of);
-    } catch (e) {
-      return Promise.reject("Tweet was missing user field.", e);
-    }
-    const newmsg = {
-      userId: muser,
-      roomId: roomid,
-      time: time,
-      type: "m.room.message",
-      content: content,
-    };
-
-    const media_promises = [];
-    if(tweet.entities.hasOwnProperty("media") && this.media_cfg.enable_download) {
-      for(const media of tweet.entities.media) {
-        if(media.type !== 'photo') {
-          continue;
-        }
-        const mimetype = mime.lookup(media.media_url_https);
-        const media_info = {
-          w: media.sizes.large.w,
-          h: media.sizes.large.h,
-          mimetype,
-          size: 0
-
-        }
-        media_promises.push(
-          util.uploadContentFromUrl(
-            this._bridge,
-            media.media_url_https
-          ).then( (obj) => {
-            media_info.size = obj.size;
-            return {
-              userId: muser,
-              roomId: roomid,
-              time: time,
-              type: "m.room.message",
-              content: {
-                body: media.display_url,
-                info: media_info,
-                msgtype: "m.image",
-                url: obj.mxc_url
-              }
-            }
-          })
-        );
-      }
-    }
-
-    return Promise.all(media_promises).then(msgs =>{
-      msgs.unshift(newmsg);
-      for(const m in this.msg_queue) {
-        if(newmsg.time > this.msg_queue[m].time) {
-          this.msg_queue.splice(m, 0, msgs);
+    return new Promise((resolve, reject) => {
+      const limiter = this._getLimiter(roomid);
+      limiter.removeTokens(1, (err, remaining) => {
+        if (err) {
+          log.error("Error trying to enqueue a tweet to " + roomid);
+          log.error(err);
+          resolve();
           return;
         }
-      }
 
-      this.msg_queue.push(msgs);
-    }).catch(reason =>{
-      log.error("Failed to submit tweet to queue, reason: %s", reason);
+        if (remaining < 1) {
+          log.warn("Rate limit exceeded for " + roomid);
+          resolve();
+          return;
+        }
+
+        const time = Date.parse(tweet.created_at);
+        let content;
+        try {
+          content = this.tweet_to_matrix_content(tweet, type, on_behalf_of);
+        } catch (e) {
+          return reject("Tweet was missing user field.", e);
+        }
+        const newmsg = {
+          userId: muser,
+          roomId: roomid,
+          time: time,
+          type: "m.room.message",
+          content: content,
+        };
+
+        const media_promises = [];
+        if(tweet.entities.hasOwnProperty("media") && this.media_cfg.enable_download) {
+          for(const media of tweet.entities.media) {
+            if(media.type !== 'photo') {
+              continue;
+            }
+            const mimetype = mime.lookup(media.media_url_https);
+            const media_info = {
+              w: media.sizes.large.w,
+              h: media.sizes.large.h,
+              mimetype,
+              size: 0,
+            };
+            media_promises.push(
+              util.uploadContentFromUrl(
+                this._bridge,
+                media.media_url_https
+              ).then( (obj) => {
+                media_info.size = obj.size;
+                return {
+                  userId: muser,
+                  roomId: roomid,
+                  time: time,
+                  type: "m.room.message",
+                  content: {
+                    body: media.display_url,
+                    info: media_info,
+                    msgtype: "m.image",
+                    url: obj.mxc_url
+                  }
+                }
+              })
+            );
+          }
+        }
+
+        Promise.all(media_promises).then(msgs =>{
+          msgs.unshift(newmsg);
+          for(const m in this.msg_queue) {
+            if(newmsg.time > this.msg_queue[m].time) {
+              this.msg_queue.splice(m, 0, msgs);
+              return;
+            }
+          }
+
+          this.msg_queue.push(msgs);
+          resolve();
+        }).catch(reason =>{
+          log.error("Failed to submit tweet to queue, reason: %s", reason);
+          resolve(); // just lie and say we did it
+        });
+      });
     });
   }
 
