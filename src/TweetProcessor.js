@@ -42,7 +42,7 @@ class TweetProcessor {
     }
     this._msg_queue_intervalID = setInterval(() => {
       if (this._isProcessing) {
-        log.warn("Skipping interval checkl - already processing messages");
+        log.warn("Skipping interval check - already processing messages");
         return;
       }
       this._isProcessing = true;
@@ -72,6 +72,7 @@ class TweetProcessor {
       const msgs = this.msg_queue.pop();
       for(const msg of msgs) {
         const intent = this._bridge.getIntentFromLocalpart(msg.userId);
+        log.info("Posting tweet to " + msg.roomId);
         promises.push(intent.sendEvent(msg.roomId, msg.type, msg.content).then(res => {
           if (msg.content.msgtype === "m.text" ) {
             this._storage.add_event(res.event_id, msg.userId, msg.roomId, msg.content.tweet_id, Date.now());
@@ -165,6 +166,7 @@ class TweetProcessor {
           return;
         }
 
+        log.info("Queueing tweet in " + roomid);
         const time = Date.parse(tweet.created_at);
         let content;
         try {
