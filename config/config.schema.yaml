@@ -12,6 +12,10 @@ properties:
             type: "string"
           database_file:
             type: "string"
+          user_store_path:
+            type: "string"
+          room_store_path:
+            type: "string"
     app_auth:
         type: "object"
         required: ["consumer_key", "consumer_secret"]

@@ -40,7 +40,7 @@ const cli = new AppService.Cli({
     }
 
     //Read registration file
-    let regObj = yaml.safeLoad(fs.readFileSync("twitter-registration.yaml", 'utf8'));
+    let regObj = yaml.safeLoad(fs.readFileSync(cli.opts.registrationPath, 'utf8'));
     regObj = AppService.AppServiceRegistration.fromObject(regObj);
     if (regObj === null) {
       throw new Error("Failed to parse registration file");
@@ -56,6 +56,8 @@ const cli = new AppService.Cli({
       homeserverUrl: config.bridge.homeserverUrl,
       domain: config.bridge.domain,
       registration: regObj,
+      userStore: config.bridge.user_store_path,
+      roomStore: config.bridge.room_store_path,
       controller: {
         onUserQuery: userQuery,
         onEvent: (request, context) => { room_handler.passEvent(request, context); },

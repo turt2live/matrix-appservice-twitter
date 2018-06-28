@@ -2,6 +2,8 @@ bridge:
   domain: localhost
   homeserverUrl: http://localhost:8008
   database_file: twitter.db
+  user_store_path: user-store.db
+  room_store_path: room-store.db
 
 app_auth: # Get these from twitter by creating an application through the API site.
   consumer_key: BLAHBLAHBLAH
