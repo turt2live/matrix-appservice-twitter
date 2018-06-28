@@ -1,6 +1,7 @@
 FROM node:alpine
 COPY . /tmp/src
 
+ENV NODE_ENV=development
 RUN apk add --no-cache -t build-deps make gcc g++ python ca-certificates libc-dev wget git \
     && cd /tmp/src \
     && npm install \
