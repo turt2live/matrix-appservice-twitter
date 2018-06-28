@@ -1,11 +1,10 @@
 FROM node:alpine
 COPY . /tmp/src
 
-RUN apk add --no-cache -t build-deps make gcc g++ python ca-certificates libc-dev wget \
+RUN apk add --no-cache -t build-deps make gcc g++ python ca-certificates libc-dev wget git \
     && cd /tmp/src \
     && npm install \
-    && npm run build \
-    && mv build / \
+    && mv src / \
     && mv config / \
     && mv node_modules / \
     && cd / \
