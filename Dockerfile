@@ -7,6 +7,7 @@ RUN apk add --no-cache -t build-deps make gcc g++ python ca-certificates libc-de
     && mv src / \
     && mv config / \
     && mv node_modules / \
+    && mv twitter-as.js /twitter-as.js \
     && cd / \
     && rm -rf /tmp/* \
     && apk del build-deps
